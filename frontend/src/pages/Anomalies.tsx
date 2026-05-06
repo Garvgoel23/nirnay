@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
 import { Anomaly } from '../types';
 import AnomalyGraph from '../components/AnomalyGraph';
@@ -8,6 +8,7 @@ const severityBadge: Record<string, string> = { critical: 'bg-red-100 text-red-7
 
 const Anomalies: React.FC = () => {
   const { tenderId } = useParams<{ tenderId: string }>();
+  const navigate = useNavigate();
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -21,8 +22,21 @@ const Anomalies: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-slate-900 mb-2">Anomaly Detection</h1>
-      <p className="text-sm text-slate-500 mb-8">Tender: {tenderId}</p>
+      <button onClick={() => navigate(`/results/${tenderId}`)} className="text-sm font-medium text-slate-500 hover:text-slate-800 mb-4 flex items-center gap-1">
+        ← Back to Results
+      </button>
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Anomaly Detection</h1>
+          <p className="text-sm text-slate-500 mt-1">Tender: {tenderId}</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">Step 4 of 5</span>
+          <Link to={`/review/${tenderId}`} className="px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-all active:scale-95">
+            Proceed to Manual Review →
+          </Link>
+        </div>
+      </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-8">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">Entity Relationship Graph</h2>

@@ -71,7 +71,31 @@ class EvaluationEngine:
             failing = []
             manual_review = []
 
+            # Find old overall verdict to supersede
+            old_overall = db.query(BidderOverallVerdict).filter(
+                BidderOverallVerdict.tender_id == tender_id,
+                BidderOverallVerdict.bidder_id == bidder_id,
+                BidderOverallVerdict.supersedes_id.is_(None)
+            ).first()
+
+            overall_uuid = str(uuid.uuid4())
+            if old_overall:
+                old_overall.supersedes_id = overall_uuid
+
+            # Find old criterion verdicts to supersede
+            old_verdicts = db.query(EvaluationVerdict).filter(
+                EvaluationVerdict.tender_id == tender_id,
+                EvaluationVerdict.bidder_id == bidder_id,
+                EvaluationVerdict.supersedes_verdict_id.is_(None)
+            ).all()
+            old_verdict_map = {v.criterion_id: v for v in old_verdicts}
+
             for criterion in criteria:
+                verdict_uuid = str(uuid.uuid4())
+                old_v = old_verdict_map.get(criterion.criterion_id)
+                if old_v:
+                    old_v.supersedes_verdict_id = verdict_uuid
+
                 extracted = value_map.get(criterion.criterion_id)
                 if not extracted:
                     # No value found at all
@@ -79,7 +103,8 @@ class EvaluationEngine:
                         tender_id, bidder_id, criterion,
                         "NOT_ELIGIBLE", 1.0, None,
                         ambiguity_reason=None,
-                        reasoning={"reason": "No extracted value found for this criterion"}
+                        reasoning={"reason": "No extracted value found for this criterion"},
+                        verdict_uuid=verdict_uuid
                     )
                     verdicts.append(verdict)
                     if criterion.mandatory:
@@ -96,6 +121,7 @@ class EvaluationEngine:
                     ambiguity_reason=result.get("ambiguity_reason"),
                     reasoning=result.get("reasoning_trace"),
                     llm_model=result.get("llm_model"),
+                    verdict_uuid=verdict_uuid
                 )
                 verdicts.append(verdict)
 
@@ -117,7 +143,7 @@ class EvaluationEngine:
                 overall = "ELIGIBLE"
 
             overall_verdict = BidderOverallVerdict(
-                id=str(uuid.uuid4()),
+                id=overall_uuid,
                 tender_id=tender_id,
                 bidder_id=bidder_id,
                 overall_verdict=overall,
@@ -169,10 +195,10 @@ class EvaluationEngine:
 
     def _create_verdict(
         self, tender_id, bidder_id, criterion, verdict, confidence,
-        extracted, ambiguity_reason=None, reasoning=None, llm_model=None
+        extracted, ambiguity_reason=None, reasoning=None, llm_model=None, verdict_uuid=None
     ) -> EvaluationVerdict:
         return EvaluationVerdict(
-            verdict_id=str(uuid.uuid4()),
+            verdict_id=verdict_uuid or str(uuid.uuid4()),
             tender_id=tender_id,
             bidder_id=bidder_id,
             criterion_id=criterion.criterion_id,

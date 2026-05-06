@@ -45,12 +45,12 @@ const Dashboard: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
           <p className="text-4xl font-bold text-indigo-700">{summary?.active_tenders || 0}</p>
           <p className="text-sm text-slate-500 mt-1">Active Tenders</p>
-          <Link to="/upload" className="text-xs text-indigo-600 hover:text-indigo-700 mt-3 inline-block font-medium">View all →</Link>
+          <Link to="/tenders" className="text-xs text-indigo-600 hover:text-indigo-700 mt-3 inline-block font-medium">View all →</Link>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
           <p className={`text-4xl font-bold ${(summary?.pending_review_count || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{summary?.pending_review_count || 0}</p>
           <p className="text-sm text-slate-500 mt-1">Pending Manual Reviews</p>
-          {(summary?.pending_review_count || 0) > 0 && <Link to="/upload" className="text-xs text-amber-600 hover:text-amber-700 mt-3 inline-block font-medium">Go to Review Queue →</Link>}
+          {(summary?.pending_review_count || 0) > 0 && <Link to="/tenders" className="text-xs text-amber-600 hover:text-amber-700 mt-3 inline-block font-medium">Go to Review Queue →</Link>}
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
           <p className="text-4xl font-bold text-slate-700">{completedThisMonth}</p>

@@ -86,6 +86,16 @@ class TenderCriteriaExtractor:
             logger.error(f"Failed to parse criteria JSON: {e}")
             raw_criteria = []
 
+        if isinstance(raw_criteria, dict):
+            # Groq json_object mode forces a dict response.
+            # Find the first list value within the dict.
+            for val in raw_criteria.values():
+                if isinstance(val, list):
+                    raw_criteria = val
+                    break
+            else:
+                raw_criteria = [raw_criteria]
+
         if not isinstance(raw_criteria, list):
             raw_criteria = [raw_criteria]
 

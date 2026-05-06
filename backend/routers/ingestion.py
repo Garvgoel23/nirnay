@@ -197,6 +197,19 @@ def process_document(doc_id: str):
                 extractor.extract(doc.tender_id, doc.department_id, pages, db)
 
             elif doc.doc_type == "bidder":
+                import time
+                max_retries = 30
+                for _ in range(max_retries):
+                    tender_doc = db.query(Document).filter(
+                        Document.tender_id == doc.tender_id,
+                        Document.doc_type == "tender"
+                    ).first()
+                    if tender_doc and tender_doc.status in ("extracted", "error"):
+                        break
+                    # Session rollback to ensure fresh read on next iteration
+                    db.rollback()
+                    time.sleep(2)
+
                 # Pull existing criteria for this tender
                 criteria = db.query(TenderCriterion).filter(
                     TenderCriterion.tender_id == doc.tender_id

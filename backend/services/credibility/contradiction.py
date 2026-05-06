@@ -112,6 +112,11 @@ class TenderContradictionChecker:
         try:
             response_text = self.gemini.generate(prompt, json_mode=True)
             contradictions = json.loads(response_text)
+            
+            # Handle case where LLM wraps the array inside an object (common with JSON mode)
+            if isinstance(contradictions, dict) and "contradictions" in contradictions:
+                contradictions = contradictions["contradictions"]
+                
             if not isinstance(contradictions, list):
                 contradictions = [contradictions]
             return contradictions

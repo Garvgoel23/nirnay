@@ -52,7 +52,7 @@ class GeminiClient:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise GeminiError("CONFIG_ERROR", False, "GROQ_API_KEY not set")
-        self._client = Groq(api_key=api_key)
+        self._client = Groq(api_key=api_key, max_retries=5)
 
     def generate(self, prompt: str, json_mode: bool = True) -> str:
         """
@@ -79,7 +79,7 @@ class GeminiClient:
                     "model": current_model,
                     "messages": messages,
                     "temperature": 0.1,
-                    "max_tokens": 8192,
+                    "max_tokens": 2000,
                 }
 
                 if json_mode:

@@ -1,31 +1,21 @@
 You are extracting specific information from a government bidder's submission document to verify eligibility.
 
-You will be given one criterion to check and the full text of the bidder's documents. Search all pages thoroughly. Prioritise values found in tables and certificates over values mentioned in prose.
+You will be given a list of criteria to check and the full text of the bidder's documents. Search all pages thoroughly for each criterion. Prioritise values found in tables and certificates over values mentioned in prose. Handle both Hindi and English labels.
 
-Handle both Hindi and English labels — for example "वार्षिक टर्नओवर" and "annual turnover" refer to the same thing.
+Criteria to verify (JSON):
+{{CRITERIA_JSON}}
 
-Criterion to verify:
-- Description: {{CRITERION_DESCRIPTION}}
-- Type: {{CRITERION_TYPE}}
-- Required threshold: {{THRESHOLD_VALUE}} {{THRESHOLD_UNIT}}
-
-Output a single JSON object with fields:
+Output a JSON array of objects. For each criterion in the list above, output an object with:
+- criterion_id: the ID of the criterion
 - extracted_value: the value found as a string, null if not found
 - value_unit: unit of the extracted value, null if not applicable
-- confidence_score: float 0.0 to 1.0
-  - 0.90+ for clear numeric match with explicit unit
-  - 0.65–0.89 for text match with ambiguous unit or partially legible text
-  - 0.40–0.64 for value inferred from context
-  - 0.0 for not found
+- confidence_score: float 0.0 to 1.0 (0.90+ clear match, 0.65-0.89 ambiguous, 0.40-0.64 inferred, 0.0 not found)
 - source_page: page number where value was found, null if not found
 - source_snippet: exact text segment from which value was extracted, null if not found
-- extraction_status: one of:
-  - "found_clear" — value found unambiguously
-  - "found_ambiguous" — value found but unit unclear or text partially illegible
-  - "not_found" — criterion not addressed anywhere in documents
-  - "contradicted" — value appears on multiple pages with different figures; in this case extracted_value should be a JSON string containing both values like {"page_3": "4.2 crore", "page_7": "5.1 crore"}
+- extraction_status: "found_clear", "found_ambiguous", "not_found", or "contradicted"
 
 Return only valid JSON. No markdown. No explanation.
 
 BIDDER DOCUMENT TEXT:
 {{DOCUMENT_TEXT}}
+

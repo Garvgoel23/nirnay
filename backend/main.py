@@ -112,3 +112,50 @@ async def dashboard_summary(request: Request, db: Session = Depends(get_db)):
         "pending_review_count": pending_review_count,
         "recent_activity": recent_activity,
     }
+
+
+@app.get("/api/dashboard/tenders")
+async def list_tenders(request: Request, db: Session = Depends(get_db)):
+    """List all tenders with their status, bidder count, and anomaly count."""
+    # Find all unique tender IDs from documents
+    tender_ids = db.query(Document.tender_id).filter(Document.doc_type == "tender").distinct().all()
+    tenders = []
+    
+    from db.models import TenderAnomaly
+    for (t_id,) in tender_ids:
+        # Get tender doc status
+        tender_doc = db.query(Document).filter(Document.tender_id == t_id, Document.doc_type == "tender").first()
+        status = tender_doc.status if tender_doc else "unknown"
+        department = tender_doc.department_id if tender_doc else "unknown"
+        
+        # Get bidder count
+        bidder_count = db.query(func.count(func.distinct(Document.bidder_id))).filter(
+            Document.tender_id == t_id, Document.doc_type == "bidder"
+        ).scalar() or 0
+        
+        # Get anomalies
+        anomalies = db.query(TenderAnomaly).filter(TenderAnomaly.tender_id == t_id).all()
+        anomaly_count = len(anomalies)
+        critical_anomalies = sum(1 for a in anomalies if a.severity == "critical")
+        
+        # Check if evaluation is done (has verdicts)
+        has_verdicts = db.query(EvaluationVerdict).filter(EvaluationVerdict.tender_id == t_id).first() is not None
+        
+        if has_verdicts:
+            overall_status = "evaluated"
+        elif status == "extracted":
+            overall_status = "ready_for_evaluation"
+        else:
+            overall_status = status
+            
+        tenders.append({
+            "tender_id": t_id,
+            "department_id": department,
+            "status": overall_status,
+            "bidder_count": bidder_count,
+            "anomaly_count": anomaly_count,
+            "critical_anomalies": critical_anomalies,
+            "created_at": str(tender_doc.created_at) if tender_doc and tender_doc.created_at else None
+        })
+        
+    return {"tenders": sorted(tenders, key=lambda x: x["created_at"] or "", reverse=True)}

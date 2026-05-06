@@ -64,41 +64,79 @@ class BidderValueExtractor:
         with open(prompt_path, "r", encoding="utf-8") as f:
             prompt_template = f.read()
 
+        # Build JSON array of criteria
+        criteria_list = []
+        for c in criteria:
+            criteria_list.append({
+                "criterion_id": c.criterion_id,
+                "description": c.description,
+                "type": c.type,
+                "threshold_value": c.threshold_value,
+                "threshold_unit": c.threshold_unit,
+            })
+        
+        criteria_json = json.dumps(criteria_list, indent=2)
+
+        prompt = prompt_template.replace("{{CRITERIA_JSON}}", criteria_json)
+        prompt = prompt.replace("{{DOCUMENT_TEXT}}", concatenated)
+
         extracted_values: List[ExtractedValue] = []
 
-        for criterion in criteria:
-            # Build targeted prompt for this criterion
-            prompt = prompt_template.replace("{{CRITERION_DESCRIPTION}}", criterion.description)
-            prompt = prompt.replace("{{THRESHOLD_VALUE}}", criterion.threshold_value or "N/A")
-            prompt = prompt.replace("{{THRESHOLD_UNIT}}", criterion.threshold_unit or "N/A")
-            prompt = prompt.replace("{{CRITERION_TYPE}}", criterion.type)
-            prompt = prompt.replace("{{DOCUMENT_TEXT}}", concatenated)
+        try:
+            response_text = self.gemini.generate(prompt, json_mode=True)
+            results = json.loads(response_text)
+            
+            if isinstance(results, dict):
+                # Groq json_object mode forces a dict response.
+                # Find the first list value within the dict.
+                for val in results.values():
+                    if isinstance(val, list):
+                        results = val
+                        break
+                else:
+                    results = [results]
+            
+            if not isinstance(results, list):
+                results = [results]
+                    
+            # Map results by criterion_id
+            results_map = {r.get("criterion_id"): r for r in results if isinstance(r, dict)}
+            
+            for criterion in criteria:
+                raw = results_map.get(criterion.criterion_id, {})
+                
+                value = ExtractedValue(
+                    value_id=str(uuid.uuid4()),
+                    criterion_id=criterion.criterion_id,
+                    bidder_id=bidder_id,
+                    tender_id=tender_id,
+                    document_id=document_id,
+                    extracted_value=raw.get("extracted_value"),
+                    value_unit=raw.get("value_unit"),
+                    confidence_score=min(max(float(raw.get("confidence_score", 0.0)), 0.0), 1.0),
+                    source_page=raw.get("source_page"),
+                    source_snippet=raw.get("source_snippet"),
+                    extraction_status=raw.get("extraction_status", "not_found"),
+                )
+                extracted_values.append(value)
 
-            try:
-                response_text = self.gemini.generate(prompt, json_mode=True)
-                raw = json.loads(response_text)
-            except Exception as e:
-                logger.warning(f"Failed to extract value for {criterion.criterion_id}: {e}")
-                raw = {
-                    "extracted_value": None,
-                    "confidence_score": 0.0,
-                    "extraction_status": "not_found",
-                }
-
-            value = ExtractedValue(
-                value_id=str(uuid.uuid4()),
-                criterion_id=criterion.criterion_id,
-                bidder_id=bidder_id,
-                tender_id=tender_id,
-                document_id=document_id,
-                extracted_value=raw.get("extracted_value"),
-                value_unit=raw.get("value_unit"),
-                confidence_score=min(max(float(raw.get("confidence_score", 0.0)), 0.0), 1.0),
-                source_page=raw.get("source_page"),
-                source_snippet=raw.get("source_snippet"),
-                extraction_status=raw.get("extraction_status", "not_found"),
-            )
-            extracted_values.append(value)
+        except Exception as e:
+            logger.warning(f"Failed to extract values for bidder {bidder_id}: {e}")
+            for criterion in criteria:
+                value = ExtractedValue(
+                    value_id=str(uuid.uuid4()),
+                    criterion_id=criterion.criterion_id,
+                    bidder_id=bidder_id,
+                    tender_id=tender_id,
+                    document_id=document_id,
+                    extracted_value=None,
+                    value_unit=None,
+                    confidence_score=0.0,
+                    source_page=None,
+                    source_snippet=None,
+                    extraction_status="not_found",
+                )
+                extracted_values.append(value)
 
         # Bulk insert into database
         db_values = []

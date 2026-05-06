@@ -31,11 +31,20 @@ const Criteria: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <div><h1 className="text-2xl font-bold text-slate-900">Criteria Review</h1><p className="text-sm text-slate-500 mt-1">Tender: {tenderId}</p></div>
-        <button onClick={runEvaluation} disabled={running} className="px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95">
-          {running ? 'Starting...' : 'Run Evaluation'}
-        </button>
+      <button onClick={() => navigate('/tenders')} className="text-sm font-medium text-slate-500 hover:text-slate-800 mb-4 flex items-center gap-1">
+        ← Back to Tenders List
+      </button>
+      <div className="flex justify-between items-end mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Criteria Review</h1>
+          <p className="text-sm text-slate-500 mt-1">Tender: {tenderId}</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">Step 2 of 5</span>
+          <button onClick={runEvaluation} disabled={running} className="px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95">
+            {running ? 'Starting...' : 'Run Evaluation →'}
+          </button>
+        </div>
       </div>
 
       {contradictions.length > 0 && (

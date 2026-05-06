@@ -77,11 +77,20 @@ const Upload: React.FC = () => {
     );
   };
 
-  const allExtracted = tenderStatus?.status === 'extracted' && bidderFiles.every(f => f.status?.status === 'extracted');
+  const allExtracted = tenderStatus?.status === 'extracted' && bidderFiles.length > 0 && bidderFiles.every(f => f.status?.status === 'extracted');
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-slate-900 mb-8">Upload Documents</h1>
+      <div className="mb-6">
+        <button onClick={() => navigate('/dashboard')} className="text-sm font-medium text-slate-500 hover:text-slate-800 mb-2 flex items-center gap-1">
+          ← Back to Dashboard
+        </button>
+        <div className="flex justify-between items-end">
+          <h1 className="text-2xl font-bold text-slate-900">Upload Documents</h1>
+          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">Step 1 of 5</span>
+        </div>
+        <p className="text-sm text-slate-500 mt-1">Upload the tender and all bidder submissions to begin.</p>
+      </div>
 
       <div className="grid sm:grid-cols-2 gap-4 mb-8">
         <div>

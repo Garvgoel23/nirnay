@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 
 const Export: React.FC = () => {
   const { tenderId } = useParams<{ tenderId: string }>();
+  const navigate = useNavigate();
   const [rejectedBidders, setRejectedBidders] = useState<{ bidder_id: string }[]>([]);
   const [letterTexts, setLetterTexts] = useState<Record<string, string>>({});
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -54,7 +55,13 @@ const Export: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-slate-900 mb-8">Export</h1>
+      <button onClick={() => navigate(`/review/${tenderId}`)} className="text-sm font-medium text-slate-500 hover:text-slate-800 mb-4 flex items-center gap-1">
+        ← Back to Review
+      </button>
+      <div className="flex justify-between items-end mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Export</h1>
+        <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Completed</span>
+      </div>
 
       {/* Evaluation Report */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">

@@ -37,14 +37,23 @@ const Review: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <div><h1 className="text-2xl font-bold text-slate-900">Manual Review Queue</h1><p className="text-sm text-slate-500 mt-1">Tender: {tenderId} · {verdicts.length} items</p></div>
-        {role === 'senior_officer' && (
-          <button onClick={handleSignOff} disabled={pendingCount > 0 || signingOff}
-            className="px-5 py-2.5 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95">
-            {signingOff ? 'Signing Off...' : `Sign Off Tender${pendingCount > 0 ? ` (${pendingCount} pending)` : ''}`}
-          </button>
-        )}
+      <button onClick={() => window.history.back()} className="text-sm font-medium text-slate-500 hover:text-slate-800 mb-4 flex items-center gap-1">
+        ← Back to Previous
+      </button>
+      <div className="flex justify-between items-end mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Manual Review Queue</h1>
+          <p className="text-sm text-slate-500 mt-1">Tender: {tenderId} · {verdicts.length} items</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">Step 5 of 5</span>
+          {role === 'senior_officer' && (
+            <button onClick={handleSignOff} disabled={pendingCount > 0 || signingOff}
+              className="px-5 py-2.5 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95">
+              {signingOff ? 'Signing Off...' : `Sign Off Tender${pendingCount > 0 ? ` (${pendingCount} pending)` : ''}`}
+            </button>
+          )}
+        </div>
       </div>
 
       {verdicts.length === 0 ? (

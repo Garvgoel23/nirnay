@@ -51,11 +51,20 @@ const Results: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <div><h1 className="text-2xl font-bold text-slate-900">Evaluation Results</h1><p className="text-sm text-slate-500 mt-1">Tender: {tenderId} · {results.total_bidders} bidders · {results.total_criteria} criteria</p></div>
-        <button onClick={runAnomalyDetection} disabled={runningAnomaly} className="px-5 py-2.5 bg-amber-600 text-white font-medium rounded-xl hover:bg-amber-700 transition-all disabled:opacity-50 active:scale-95">
-          {runningAnomaly ? 'Detecting...' : 'Run Anomaly Detection'}
-        </button>
+      <button onClick={() => navigate(`/criteria/${tenderId}`)} className="text-sm font-medium text-slate-500 hover:text-slate-800 mb-4 flex items-center gap-1">
+        ← Back to Criteria
+      </button>
+      <div className="flex justify-between items-end mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Evaluation Results</h1>
+          <p className="text-sm text-slate-500 mt-1">Tender: {tenderId} · {results.total_bidders} bidders · {results.total_criteria} criteria</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">Step 3 of 5</span>
+          <button onClick={runAnomalyDetection} disabled={runningAnomaly} className="px-5 py-2.5 bg-amber-600 text-white font-medium rounded-xl hover:bg-amber-700 transition-all disabled:opacity-50 active:scale-95">
+            {runningAnomaly ? 'Detecting...' : 'Run Anomaly Detection →'}
+          </button>
+        </div>
       </div>
       <VerdictGrid bidders={results.bidders} criteria={results.criteria} onCellClick={setSelectedVerdict} />
       <SourceDrawer verdict={selectedVerdict} onClose={() => setSelectedVerdict(null)} />

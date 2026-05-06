@@ -25,7 +25,14 @@ async def get_status(tender_id: str, db: Session = Depends(get_db)):
     bidd = db.query(func.count(func.distinct(BidderExtractedValue.bidder_id))).filter(BidderExtractedValue.tender_id == tender_id).scalar() or 0
     total = crit * bidd
     processed = db.query(func.count(EvaluationVerdict.verdict_id)).filter(EvaluationVerdict.tender_id == tender_id, EvaluationVerdict.supersedes_verdict_id.is_(None)).scalar() or 0
-    return {"tender_id": tender_id, "processed": processed, "total": total, "status": "complete" if processed >= total and total > 0 else "processing"}
+    job_status = _evaluation_jobs.get(tender_id, {}).get("status")
+    
+    if job_status in ("complete", "error"):
+        status = job_status
+    else:
+        status = "complete" if processed >= total and total > 0 else "processing"
+        
+    return {"tender_id": tender_id, "processed": processed, "total": total, "status": status}
 
 @router.get("/results/{tender_id}")
 async def get_results(tender_id: str, db: Session = Depends(get_db)):

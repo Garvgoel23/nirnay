@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import About from './pages/About';
 import Dashboard from './pages/Dashboard';
+import Tenders from './pages/Tenders';
 import Upload from './pages/Upload';
 import Criteria from './pages/Criteria';
 import Results from './pages/Results';
@@ -29,6 +30,7 @@ const App: React.FC = () => {
           <Route path="/terms" element={<Terms />} />
           {/* Auth-guarded routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/tenders" element={<ProtectedRoute><Tenders /></ProtectedRoute>} />
           <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
           <Route path="/criteria/:tenderId" element={<ProtectedRoute><Criteria /></ProtectedRoute>} />
           <Route path="/results/:tenderId" element={<ProtectedRoute><Results /></ProtectedRoute>} />
