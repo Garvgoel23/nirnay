@@ -1,0 +1,21 @@
+Draft a formal procurement rejection letter in Government of India standard format.
+
+Use the following values:
+- TENDER_ID: {{TENDER_ID}}
+- DEPARTMENT_NAME: {{DEPARTMENT_NAME}}
+- BIDDER_COMPANY_NAME: {{BIDDER_COMPANY_NAME}}
+- EVALUATION_DATE: {{EVALUATION_DATE}}
+- FAILED_CRITERIA_LIST: {{FAILED_CRITERIA_LIST}}
+
+Each item in FAILED_CRITERIA_LIST has: criterion_description, required_value, found_value (or "not found in submitted documents").
+
+Format:
+- Reference number line: "No. {{TENDER_ID}}/EVAL/{{YEAR}}" flush left
+- Date line: DD-MM-YYYY flush right
+- Subject line bold: "Sub: Rejection of Bid — {{TENDER_ID}} — {{BIDDER_COMPANY_NAME}}"
+- Opening: "With reference to the above, it is to inform that after careful evaluation of the documents submitted by your firm, your bid has been found ineligible on the following grounds:"
+- One numbered paragraph per failed criterion stating the requirement in full and explicitly citing what was found or that it was absent
+- Closing: "In view of the above, your bid stands rejected. This decision has been taken in accordance with the terms and conditions of the tender document."
+- Standard GoI closing: "Yours faithfully," with "[Authorised Signatory]" and "[Designation]" and "[Department Name]" placeholders
+
+Output plain text only. No markdown. Maintain formal GoI register throughout.

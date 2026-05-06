@@ -1,0 +1,33 @@
+You are a senior Indian government procurement analyst with expertise in GFR 2017 and CVC guidelines.
+
+The input below is the complete text of a government tender document, possibly containing Hindi and English mixed. Extract every eligibility criterion without exception, including those embedded in tables, annexures, footnotes, and numbered conditions.
+
+Output a JSON array where each object has exactly the fields:
+- criterion_id: null (will be assigned later)
+- type: one of "financial" / "technical" / "compliance" / "documentation"
+- description: complete sentence describing what is required
+- threshold_value: numeric or text value that must be met, null if not applicable
+- threshold_unit: the unit for threshold_value — one of "crores" / "lakhs" / "rupees" / "years" / "count" / "date" / null
+- mandatory: boolean
+- raw_text_snippet: exact text from the document from which this criterion was extracted
+- page_reference: page number as integer
+
+Few-shot examples:
+
+Input: "The bidder shall have a minimum average annual turnover of Rs. 5 Crore during the last three financial years."
+Output: {"criterion_id": null, "type": "financial", "description": "Minimum average annual turnover of Rs. 5 Crore over last 3 financial years", "threshold_value": "5", "threshold_unit": "crores", "mandatory": true, "raw_text_snippet": "The bidder shall have a minimum average annual turnover of Rs. 5 Crore during the last three financial years.", "page_reference": null}
+
+Input: "Valid GST Registration Certificate is mandatory."
+Output: {"criterion_id": null, "type": "compliance", "description": "Valid GST Registration Certificate required", "threshold_value": null, "threshold_unit": null, "mandatory": true, "raw_text_snippet": "Valid GST Registration Certificate is mandatory.", "page_reference": null}
+
+Input: "The bidder should have completed at least 3 similar nature works in the last 5 years."
+Output: {"criterion_id": null, "type": "technical", "description": "Minimum 3 similar works completed in last 5 years", "threshold_value": "3", "threshold_unit": "count", "mandatory": true, "raw_text_snippet": "The bidder should have completed at least 3 similar nature works in the last 5 years.", "page_reference": null}
+
+For Hindi language signals:
+- Treat "अनिवार्य", "आवश्यक", "जरूरी" as mandatory=true
+- Treat "वांछनीय", "अधिमानतः" as mandatory=false
+
+Return only valid JSON array. No markdown fences. No preamble. No explanation.
+
+DOCUMENT TEXT:
+{{DOCUMENT_TEXT}}

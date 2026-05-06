@@ -1,0 +1,31 @@
+# ========================
+# Root .gitignore — Nirnay
+# ========================
+
+# ---------- Environment & Secrets ----------
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---------- IDE / Editor ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Docker ----------
+docker-compose.override.yml
+
+# ---------- OS ----------
+*.log
+*.tmp
+*.bak
+
+# ---------- Gemini / AI tooling ----------
+.gemini/
+.antigravityignore
