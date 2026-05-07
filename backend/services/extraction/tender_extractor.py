@@ -137,6 +137,20 @@ class TenderCriteriaExtractor:
             )
             db_criteria.append(db_criterion)
 
+        # Delete any existing criteria for this tender before re-inserting
+        # (handles re-uploads of the same tender_id without UNIQUE constraint errors)
+        existing = db.query(TenderCriterion).filter(
+            TenderCriterion.tender_id == tender_id
+        ).count()
+        if existing:
+            logger.info(
+                f"Deleting {existing} existing criteria for tender {tender_id} before re-extraction"
+            )
+            db.query(TenderCriterion).filter(
+                TenderCriterion.tender_id == tender_id
+            ).delete(synchronize_session=False)
+            db.commit()
+
         db.bulk_save_objects(db_criteria)
         db.commit()
 
