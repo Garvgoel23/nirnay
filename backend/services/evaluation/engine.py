@@ -1,20 +1,16 @@
 """
-Evaluation engine — orchestrates per-criterion verdicts and computes overall bidder verdicts.
-All verdicts are INSERT-ONLY (never updated or deleted).
+Evaluation engine — orchestrates per-bidder batch LLM evaluation and computes overall verdicts.
+One LLM call per bidder (batch across all criteria). All verdicts are INSERT-ONLY.
 """
 import logging
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
 from db.models import (
     TenderCriterion, BidderExtractedValue, EvaluationVerdict,
-    BidderOverallVerdict, DocumentAuthenticity
-)
-from services.evaluation.comparators import (
-    FinancialComparator, CertificationComparator,
-    ExperienceComparator, DocumentationComparator
+    BidderOverallVerdict, DocumentAuthenticity, Document
 )
 from services.evaluation.arbitration import LLMArbitrator
 
@@ -25,36 +21,45 @@ class EvaluationEngine:
     """Produces per-criterion and overall verdicts for all bidders in a tender."""
 
     def __init__(self):
-        self.comparators = {
-            "financial": FinancialComparator(),
-            "technical": ExperienceComparator(),
-            "compliance": CertificationComparator(),
-            "documentation": DocumentationComparator(),
-        }
         self.arbitrator = LLMArbitrator()
 
     def evaluate_tender(self, tender_id: str, db: Session):
         """
         Run full evaluation for all bidders against all criteria.
+        Makes exactly ONE LLM call per bidder (batch evaluation).
 
         Args:
             tender_id: The tender identifier
             db: Database session
         """
-        criteria = db.query(TenderCriterion).filter(
+        criteria: List[TenderCriterion] = db.query(TenderCriterion).filter(
             TenderCriterion.tender_id == tender_id
         ).all()
 
-        all_values = db.query(BidderExtractedValue).filter(
+        if not criteria:
+            logger.warning(f"No criteria found for tender {tender_id}, nothing to evaluate")
+            return
+
+        # Collect all bidder IDs from Documents table (source of truth)
+        bidder_docs = db.query(Document).filter(
+            Document.tender_id == tender_id,
+            Document.doc_type == "bidder",
+        ).all()
+        all_bidder_ids = list({d.bidder_id for d in bidder_docs if d.bidder_id})
+
+        if not all_bidder_ids:
+            logger.warning(f"No bidder documents found for tender {tender_id}")
+            return
+
+        # Load all extracted values
+        all_values: List[BidderExtractedValue] = db.query(BidderExtractedValue).filter(
             BidderExtractedValue.tender_id == tender_id
         ).all()
 
         # Group values by bidder
         bidder_values: Dict[str, List[BidderExtractedValue]] = {}
         for v in all_values:
-            if v.bidder_id not in bidder_values:
-                bidder_values[v.bidder_id] = []
-            bidder_values[v.bidder_id].append(v)
+            bidder_values.setdefault(v.bidder_id, []).append(v)
 
         # Pre-fetch authenticity scores
         auth_scores: Dict[str, float] = {}
@@ -65,13 +70,15 @@ class EvaluationEngine:
                 ).first()
                 auth_scores[v.document_id] = auth_record.authenticity_score if auth_record else 100.0
 
-        for bidder_id, values in bidder_values.items():
-            value_map = {v.criterion_id: v for v in values}
+        for bidder_id in all_bidder_ids:
+            values = bidder_values.get(bidder_id, [])
+            value_map: Dict[str, BidderExtractedValue] = {v.criterion_id: v for v in values}
+
             verdicts = []
             failing = []
             manual_review = []
 
-            # Find old overall verdict to supersede
+            # Supersede old overall verdict
             old_overall = db.query(BidderOverallVerdict).filter(
                 BidderOverallVerdict.tender_id == tender_id,
                 BidderOverallVerdict.bidder_id == bidder_id,
@@ -82,7 +89,7 @@ class EvaluationEngine:
             if old_overall:
                 old_overall.supersedes_id = overall_uuid
 
-            # Find old criterion verdicts to supersede
+            # Supersede old criterion verdicts
             old_verdicts = db.query(EvaluationVerdict).filter(
                 EvaluationVerdict.tender_id == tender_id,
                 EvaluationVerdict.bidder_id == bidder_id,
@@ -90,38 +97,47 @@ class EvaluationEngine:
             ).all()
             old_verdict_map = {v.criterion_id: v for v in old_verdicts}
 
+            # === ONE LLM CALL PER BIDDER ===
+            logger.info(f"Running batch LLM evaluation for bidder {bidder_id} on tender {tender_id}")
+            batch_results = self.arbitrator.evaluate_all_criteria(criteria, value_map, auth_scores)
+
             for criterion in criteria:
                 verdict_uuid = str(uuid.uuid4())
+
+                # Link old verdict to new one
                 old_v = old_verdict_map.get(criterion.criterion_id)
                 if old_v:
                     old_v.supersedes_verdict_id = verdict_uuid
 
                 extracted = value_map.get(criterion.criterion_id)
-                if not extracted:
-                    # No value found at all
-                    verdict = self._create_verdict(
-                        tender_id, bidder_id, criterion,
-                        "NOT_ELIGIBLE", 1.0, None,
-                        ambiguity_reason=None,
-                        reasoning={"reason": "No extracted value found for this criterion"},
-                        verdict_uuid=verdict_uuid
-                    )
-                    verdicts.append(verdict)
-                    if criterion.mandatory:
-                        failing.append(criterion.criterion_id)
-                    continue
+                result = batch_results.get(criterion.criterion_id, {
+                    "verdict": "MANUAL_REVIEW",
+                    "confidence": 0.5,
+                    "score": 50,
+                    "message": "No LLM result returned.",
+                    "reasoning": "",
+                    "ambiguity_reason": "No LLM result returned for this criterion.",
+                    "llm_model": None,
+                })
 
-                auth_score = auth_scores.get(extracted.document_id, 100.0)
-                result = self.evaluate_single(criterion, extracted, auth_score)
-
-                verdict = self._create_verdict(
-                    tender_id, bidder_id, criterion,
-                    result["verdict"], result["confidence"],
-                    extracted,
+                verdict = EvaluationVerdict(
+                    verdict_id=verdict_uuid,
+                    tender_id=tender_id,
+                    bidder_id=bidder_id,
+                    criterion_id=criterion.criterion_id,
+                    verdict=result["verdict"],
+                    confidence_score=result["confidence"],
+                    evidence_document_id=extracted.document_id if extracted else None,
+                    source_page=extracted.source_page if extracted else None,
+                    extracted_value=extracted.extracted_value if extracted else None,
+                    threshold_value=criterion.threshold_value,
                     ambiguity_reason=result.get("ambiguity_reason"),
-                    reasoning=result.get("reasoning_trace"),
-                    llm_model=result.get("llm_model"),
-                    verdict_uuid=verdict_uuid
+                    reasoning_trace={
+                        "llm_reasoning": result.get("reasoning", ""),
+                        "message": result.get("message", ""),
+                        "score": result.get("score", 50),
+                    },
+                    llm_model_used=result.get("llm_model"),
                 )
                 verdicts.append(verdict)
 
@@ -151,64 +167,11 @@ class EvaluationEngine:
                 manual_review_criteria=manual_review if manual_review else None,
             )
             db.add(overall_verdict)
+            db.commit()
 
-        db.commit()
-        logger.info(f"Evaluation complete for tender {tender_id}: {len(bidder_values)} bidders")
+            logger.info(
+                f"Bidder {bidder_id}: overall={overall}, "
+                f"failing={len(failing)}, manual_review={len(manual_review)}"
+            )
 
-    def evaluate_single(
-        self, criterion: TenderCriterion,
-        extracted: BidderExtractedValue,
-        authenticity_score: float
-    ) -> dict:
-        """
-        Evaluate a single criterion-value pair.
-        Applies ambiguity override first, then type-specific comparator.
-        """
-        # Ambiguity override checks
-        if extracted.confidence_score < 0.65:
-            return {
-                "verdict": "MANUAL_REVIEW",
-                "confidence": extracted.confidence_score,
-                "ambiguity_reason": f"Low extraction confidence: {extracted.confidence_score:.2f} < 0.65",
-                "reasoning_trace": {"trigger": "low_confidence", "value": extracted.confidence_score},
-            }
-
-        if extracted.extraction_status == "contradicted":
-            return {
-                "verdict": "MANUAL_REVIEW",
-                "confidence": extracted.confidence_score,
-                "ambiguity_reason": "Contradicted values found across pages",
-                "reasoning_trace": {"trigger": "contradicted_value", "extracted": extracted.extracted_value},
-            }
-
-        if authenticity_score < 50:
-            return {
-                "verdict": "MANUAL_REVIEW",
-                "confidence": extracted.confidence_score,
-                "ambiguity_reason": f"Low document authenticity score: {authenticity_score:.0f} < 50",
-                "reasoning_trace": {"trigger": "low_authenticity", "score": authenticity_score},
-            }
-
-        # Dispatch to type-specific comparator
-        comparator = self.comparators.get(criterion.type, self.comparators["documentation"])
-        return comparator.compare(extracted, criterion, self.arbitrator, authenticity_score)
-
-    def _create_verdict(
-        self, tender_id, bidder_id, criterion, verdict, confidence,
-        extracted, ambiguity_reason=None, reasoning=None, llm_model=None, verdict_uuid=None
-    ) -> EvaluationVerdict:
-        return EvaluationVerdict(
-            verdict_id=verdict_uuid or str(uuid.uuid4()),
-            tender_id=tender_id,
-            bidder_id=bidder_id,
-            criterion_id=criterion.criterion_id,
-            verdict=verdict,
-            confidence_score=confidence,
-            evidence_document_id=extracted.document_id if extracted else None,
-            source_page=extracted.source_page if extracted else None,
-            extracted_value=extracted.extracted_value if extracted else None,
-            threshold_value=criterion.threshold_value,
-            ambiguity_reason=ambiguity_reason,
-            reasoning_trace=reasoning,
-            llm_model_used=llm_model,
-        )
+        logger.info(f"Evaluation complete for tender {tender_id}: {len(all_bidder_ids)} bidders processed")

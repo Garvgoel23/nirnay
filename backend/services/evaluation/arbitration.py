@@ -1,80 +1,176 @@
 """
-LLM arbitration for borderline eligibility verdicts.
-Uses Gemini 2.5 Pro with step-by-step reasoning.
+Batch LLM evaluation — evaluates ALL criteria for a single bidder in one LLM call.
+Returns a dict keyed by criterion_id with verdict, confidence, score, message, reasoning.
 """
 import json
 import logging
 import os
+from typing import Dict, List
 
-from services.gemini_client import GeminiClient
+from services.gemini_client import GeminiClient, GeminiError
 
 logger = logging.getLogger(__name__)
 
 
 class LLMArbitrator:
-    """Resolves borderline verdicts via LLM reasoning."""
+    """Evaluates all criteria for a bidder in a single batched LLM call."""
 
     def __init__(self):
-        self.gemini = GeminiClient(model="gemini-2.5-pro", service_name="arbitration")
+        self.gemini = GeminiClient(model="gemini-2.0-flash", service_name="batch_evaluator")
 
-    def arbitrate(self, criterion, extracted_value, authenticity_score: float) -> dict:
+    def evaluate_all_criteria(
+        self,
+        criteria: list,
+        value_map: Dict[str, object],  # criterion_id → BidderExtractedValue or None
+        auth_scores: Dict[str, float],  # document_id → authenticity score
+    ) -> Dict[str, dict]:
         """
-        Run LLM arbitration for a borderline criterion-value pair.
+        Evaluate all criteria for one bidder in a single LLM call.
 
         Args:
-            criterion: The tender criterion
-            extracted_value: The extracted bidder value
-            authenticity_score: Document authenticity score (0–100)
+            criteria: List of TenderCriterion ORM objects
+            value_map: Dict mapping criterion_id → BidderExtractedValue (or None if missing)
+            auth_scores: Dict mapping document_id → authenticity score (0–100)
 
         Returns:
-            Dict with verdict, confidence, reasoning_trace, llm_model
+            Dict mapping criterion_id → result dict with keys:
+                verdict, confidence, score, message, reasoning, ambiguity_reason
         """
+        # Build criteria JSON for prompt
+        criteria_list = []
+        for c in criteria:
+            criteria_list.append({
+                "criterion_id": c.criterion_id,
+                "type": c.type,
+                "description": c.description,
+                "threshold_value": c.threshold_value,
+                "threshold_unit": c.threshold_unit,
+                "mandatory": c.mandatory,
+            })
+
+        # Build extracted values JSON for prompt
+        extracted_list = []
+        overall_auth = 100.0
+        for c in criteria:
+            ev = value_map.get(c.criterion_id)
+            if ev:
+                doc_auth = auth_scores.get(ev.document_id, 100.0)
+                overall_auth = min(overall_auth, doc_auth)
+                extracted_list.append({
+                    "criterion_id": c.criterion_id,
+                    "extracted_value": ev.extracted_value,
+                    "value_unit": ev.value_unit,
+                    "confidence_score": ev.confidence_score,
+                    "extraction_status": ev.extraction_status,
+                    "source_page": ev.source_page,
+                    "source_snippet": ev.source_snippet,
+                })
+            else:
+                extracted_list.append({
+                    "criterion_id": c.criterion_id,
+                    "extracted_value": None,
+                    "value_unit": None,
+                    "confidence_score": 0.0,
+                    "extraction_status": "not_found",
+                    "source_page": None,
+                    "source_snippet": None,
+                })
+
+        # Load and fill prompt template
         prompt_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "prompts", "llm_arbitration_v1.txt"
+            "prompts", "batch_evaluation_v1.txt"
         )
         with open(prompt_path, "r", encoding="utf-8") as f:
             prompt_template = f.read()
 
-        prompt = prompt_template.replace("{{CRITERION_DESCRIPTION}}", criterion.description or "")
-        prompt = prompt.replace("{{THRESHOLD_VALUE}}", str(criterion.threshold_value or ""))
-        prompt = prompt.replace("{{THRESHOLD_UNIT}}", str(criterion.threshold_unit or ""))
-        prompt = prompt.replace("{{EXTRACTED_VALUE}}", str(extracted_value.extracted_value or ""))
-        prompt = prompt.replace("{{VALUE_UNIT}}", str(extracted_value.value_unit or ""))
-        prompt = prompt.replace("{{CONFIDENCE_SCORE}}", str(extracted_value.confidence_score))
-        prompt = prompt.replace("{{OCR_CONFIDENCE}}", str(getattr(extracted_value, 'ocr_confidence', 'N/A')))
-        prompt = prompt.replace("{{AUTHENTICITY_SCORE}}", str(authenticity_score))
+        prompt = prompt_template.replace("{{CRITERIA_JSON}}", json.dumps(criteria_list, indent=2))
+        prompt = prompt.replace("{{EXTRACTED_VALUES_JSON}}", json.dumps(extracted_list, indent=2))
+        prompt = prompt.replace("{{AUTHENTICITY_SCORE}}", str(round(overall_auth, 1)))
+
+        logger.info(f"batch_evaluate called for {len(criteria)} criteria, auth_score={overall_auth:.1f}")
 
         try:
             response_text = self.gemini.generate(prompt, json_mode=True)
-            result = json.loads(response_text)
+            logger.info("Groq response received for batch evaluation")
+            raw = json.loads(response_text)
+
+            # Handle both {"results": [...]} and direct list
+            if isinstance(raw, dict):
+                items = raw.get("results", [])
+                if not items:
+                    # Try first list value
+                    for v in raw.values():
+                        if isinstance(v, list):
+                            items = v
+                            break
+            elif isinstance(raw, list):
+                items = raw
+            else:
+                items = []
+
         except Exception as e:
-            logger.error(f"Arbitration failed: {e}")
+            logger.error(f"Batch evaluation LLM call failed: {e}")
+            # Fallback: mark everything as MANUAL_REVIEW
             return {
-                "verdict": "MANUAL_REVIEW",
-                "confidence": 0.5,
-                "ambiguity_reason": f"LLM arbitration failed: {str(e)}",
-                "reasoning_trace": {"error": str(e)},
-                "llm_model": "gemini-2.5-pro",
+                c.criterion_id: {
+                    "verdict": "MANUAL_REVIEW",
+                    "confidence": 0.5,
+                    "score": 50,
+                    "message": f"LLM evaluation failed: {str(e)[:120]}",
+                    "reasoning": str(e),
+                    "ambiguity_reason": f"LLM batch call failed: {str(e)[:120]}",
+                    "llm_model": "llama-3.1-8b-instant",
+                }
+                for c in criteria
             }
 
-        verdict = result.get("verdict", "MANUAL_REVIEW")
-        confidence = float(result.get("confidence", 0.5))
-        reasoning = result.get("reasoning", "")
+        # Build result map
+        results: Dict[str, dict] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            cid = item.get("criterion_id")
+            if not cid:
+                continue
+            verdict = item.get("verdict", "MANUAL_REVIEW")
+            confidence = float(item.get("confidence", 0.5))
+            score = int(item.get("score", 50))
+            message = item.get("message", "")
+            reasoning = item.get("reasoning", "")
 
-        # Enforce: ELIGIBLE with low confidence → MANUAL_REVIEW
-        if verdict == "ELIGIBLE" and confidence < 0.75:
-            verdict = "MANUAL_REVIEW"
-            reasoning += " [Overridden: confidence below 0.75 threshold for ELIGIBLE]"
+            # Safety: only override ELIGIBLE → MANUAL_REVIEW if confidence is truly very low
+            # Threshold is 0.55 to match the decisional prompt — we want the LLM to decide
+            if verdict == "ELIGIBLE" and confidence < 0.55:
+                verdict = "MANUAL_REVIEW"
+                reasoning += " [Overridden: confidence below 0.55 — evidence too weak to confirm ELIGIBLE]"
 
-        ambiguity_reason = None
-        if verdict == "MANUAL_REVIEW":
-            ambiguity_reason = f"LLM arbitration: {reasoning[:200]}"
+            ambiguity_reason = None
+            if verdict == "MANUAL_REVIEW":
+                ambiguity_reason = message[:250] if message else reasoning[:250]
 
-        return {
-            "verdict": verdict,
-            "confidence": confidence,
-            "ambiguity_reason": ambiguity_reason,
-            "reasoning_trace": {"llm_reasoning": reasoning, "raw_result": result},
-            "llm_model": "gemini-2.5-pro",
-        }
+            results[cid] = {
+                "verdict": verdict,
+                "confidence": confidence,
+                "score": score,
+                "message": message,
+                "reasoning": reasoning,
+                "ambiguity_reason": ambiguity_reason,
+                "llm_model": "llama-3.1-8b-instant",
+            }
+
+        # Ensure every criterion has a result (fill missing with MANUAL_REVIEW)
+        for c in criteria:
+            if c.criterion_id not in results:
+                logger.warning(f"LLM did not return result for criterion {c.criterion_id}, defaulting to MANUAL_REVIEW")
+                results[c.criterion_id] = {
+                    "verdict": "MANUAL_REVIEW",
+                    "confidence": 0.5,
+                    "score": 50,
+                    "message": "LLM did not return a verdict for this criterion.",
+                    "reasoning": "Missing from LLM batch response.",
+                    "ambiguity_reason": "LLM did not return a verdict for this criterion.",
+                    "llm_model": "llama-3.1-8b-instant",
+                }
+
+        return results

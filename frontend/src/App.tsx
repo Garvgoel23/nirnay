@@ -10,6 +10,7 @@ import Tenders from './pages/Tenders';
 import Upload from './pages/Upload';
 import Criteria from './pages/Criteria';
 import Results from './pages/Results';
+import Compare from './pages/Compare';
 import Anomalies from './pages/Anomalies';
 import Review from './pages/Review';
 import Export from './pages/Export';
@@ -34,6 +35,7 @@ const App: React.FC = () => {
           <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
           <Route path="/criteria/:tenderId" element={<ProtectedRoute><Criteria /></ProtectedRoute>} />
           <Route path="/results/:tenderId" element={<ProtectedRoute><Results /></ProtectedRoute>} />
+          <Route path="/compare/:tenderId" element={<ProtectedRoute><Compare /></ProtectedRoute>} />
           <Route path="/anomalies/:tenderId" element={<ProtectedRoute><Anomalies /></ProtectedRoute>} />
           <Route path="/review/:tenderId" element={<ProtectedRoute><Review /></ProtectedRoute>} />
           <Route path="/export/:tenderId" element={<ProtectedRoute><Export /></ProtectedRoute>} />

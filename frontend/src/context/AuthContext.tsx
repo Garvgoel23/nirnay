@@ -19,7 +19,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  role: 'officer',
+  role: 'senior_officer',
   loading: false,
   signInWithGoogle: async () => {},
   logout: async () => {},
@@ -29,7 +29,7 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [role, setRole] = useState('officer');
+  const [role, setRole] = useState('senior_officer');
   const [loading, setLoading] = useState(true);
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [authInstance, setAuthInstance] = useState<any>(null);
@@ -71,10 +71,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (firebaseUser) {
             setUser(firebaseUser as unknown as FirebaseUser);
             const tokenResult = await firebaseUser.getIdTokenResult();
-            setRole((tokenResult.claims.role as string) || 'officer');
+            setRole((tokenResult.claims.role as string) || 'senior_officer');
           } else {
             setUser(null);
-            setRole('officer');
+            setRole('senior_officer');
           }
           setLoading(false);
         });
@@ -106,7 +106,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await signOut(authInstance);
     }
     setUser(null);
-    setRole('officer');
+    setRole('senior_officer');
   };
 
   return (

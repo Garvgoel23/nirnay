@@ -52,7 +52,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # Attach user info to request state
             request.state.user_id = decoded.get("uid", decoded.get("sub", ""))
             request.state.email = decoded.get("email", "")
-            request.state.role = decoded.get("role", "officer")
+            request.state.role = decoded.get("role", "senior_officer")
             request.state.officer_id = decoded.get("uid", decoded.get("sub", ""))
 
         except Exception as e:

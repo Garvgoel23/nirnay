@@ -26,7 +26,7 @@ class ExtractedValue(BaseModel):
     source_snippet: Optional[str] = None
     extraction_status: str = Field(
         ...,
-        pattern=r"^(found_clear|found_ambiguous|not_found|contradicted)$"
+        pattern=r"^(found_clear|found_ambiguous|not_found|contradicted|inferred)$"
     )
     extracted_at: Optional[datetime] = None
 

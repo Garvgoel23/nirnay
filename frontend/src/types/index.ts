@@ -28,6 +28,8 @@ export interface Verdict {
   tender_id: string;
   bidder_id: string;
   criterion_id: string;
+  criterion_description?: string;
+  criterion_type?: string;
   verdict: 'ELIGIBLE' | 'NOT_ELIGIBLE' | 'MANUAL_REVIEW';
   confidence_score: number;
   evidence_document_id?: string;
@@ -78,10 +80,13 @@ export interface Contradiction {
 export interface DashboardSummary {
   active_tenders: number;
   pending_review_count: number;
+  completed_this_month: number;
   recent_activity: {
     id: string;
     action_type: string;
     target_id: string;
+    detail?: string;
+    actor?: string;
     comment?: string;
     timestamp?: string;
   }[];

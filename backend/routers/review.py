@@ -3,7 +3,7 @@ import logging, uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import EvaluationVerdict, OfficerAction, BidderOverallVerdict
+from db.models import EvaluationVerdict, OfficerAction, BidderOverallVerdict, TenderCriterion
 from models.verdict import OverrideRequest
 
 logger = logging.getLogger(__name__)
@@ -11,9 +11,38 @@ router = APIRouter(prefix="/api/review", tags=["Review"])
 
 @router.get("/queue/{tender_id}")
 async def get_review_queue(tender_id: str, db: Session = Depends(get_db)):
-    verdicts = db.query(EvaluationVerdict).filter(EvaluationVerdict.tender_id == tender_id, EvaluationVerdict.verdict == "MANUAL_REVIEW", EvaluationVerdict.supersedes_verdict_id.is_(None)).all()
-    return {"tender_id": tender_id, "total_count": len(verdicts), "verdicts": [
-        {"verdict_id": v.verdict_id, "bidder_id": v.bidder_id, "criterion_id": v.criterion_id, "verdict": v.verdict, "confidence_score": v.confidence_score, "extracted_value": v.extracted_value, "threshold_value": v.threshold_value, "ambiguity_reason": v.ambiguity_reason, "source_page": v.source_page, "evidence_document_id": v.evidence_document_id, "reasoning_trace": v.reasoning_trace} for v in verdicts]}
+    verdicts = db.query(EvaluationVerdict).filter(
+        EvaluationVerdict.tender_id == tender_id,
+        EvaluationVerdict.verdict == "MANUAL_REVIEW",
+        EvaluationVerdict.supersedes_verdict_id.is_(None)
+    ).all()
+
+    # Pre-fetch criteria for descriptions
+    criteria = db.query(TenderCriterion).filter(TenderCriterion.tender_id == tender_id).all()
+    criteria_map = {c.criterion_id: c for c in criteria}
+
+    return {
+        "tender_id": tender_id,
+        "total_count": len(verdicts),
+        "verdicts": [
+            {
+                "verdict_id": v.verdict_id,
+                "bidder_id": v.bidder_id,
+                "criterion_id": v.criterion_id,
+                "criterion_description": criteria_map.get(v.criterion_id, type('', (), {'description': None})()).description,
+                "criterion_type": criteria_map.get(v.criterion_id, type('', (), {'type': None})()).type,
+                "verdict": v.verdict,
+                "confidence_score": v.confidence_score,
+                "extracted_value": v.extracted_value,
+                "threshold_value": v.threshold_value,
+                "ambiguity_reason": v.ambiguity_reason,
+                "source_page": v.source_page,
+                "evidence_document_id": v.evidence_document_id,
+                "reasoning_trace": v.reasoning_trace,
+            }
+            for v in verdicts
+        ]
+    }
 
 @router.post("/override/{verdict_id}")
 async def override_verdict(verdict_id: str, body: OverrideRequest, request: Request, db: Session = Depends(get_db)):

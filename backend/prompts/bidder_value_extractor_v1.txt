@@ -12,7 +12,7 @@ Output a JSON array of objects. For each criterion in the list above, output an 
 - confidence_score: float 0.0 to 1.0 (0.90+ clear match, 0.65-0.89 ambiguous, 0.40-0.64 inferred, 0.0 not found)
 - source_page: page number where value was found, null if not found
 - source_snippet: exact text segment from which value was extracted, null if not found
-- extraction_status: "found_clear", "found_ambiguous", "not_found", or "contradicted"
+- extraction_status: "found_clear", "found_ambiguous", "not_found", "contradicted", or "inferred"
 
 Return only valid JSON. No markdown. No explanation.
 

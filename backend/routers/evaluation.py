@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from db.database import get_db
-from db.models import EvaluationVerdict, BidderOverallVerdict, TenderCriterion, BidderExtractedValue
+from db.models import EvaluationVerdict, BidderOverallVerdict, TenderCriterion, BidderExtractedValue, Document
 from services.evaluation.engine import EvaluationEngine
 
 logger = logging.getLogger(__name__)
@@ -21,17 +21,36 @@ async def run_evaluation(tender_id: str, background_tasks: BackgroundTasks, db: 
 
 @router.get("/status/{tender_id}")
 async def get_status(tender_id: str, db: Session = Depends(get_db)):
-    crit = db.query(func.count(TenderCriterion.criterion_id)).filter(TenderCriterion.tender_id == tender_id).scalar() or 0
-    bidd = db.query(func.count(func.distinct(BidderExtractedValue.bidder_id))).filter(BidderExtractedValue.tender_id == tender_id).scalar() or 0
+    # Count criteria and bidders from their source-of-truth tables
+    crit = db.query(func.count(TenderCriterion.criterion_id)).filter(
+        TenderCriterion.tender_id == tender_id
+    ).scalar() or 0
+
+    # Use Documents table so total is non-zero even before extraction completes
+    bidd = db.query(func.count(func.distinct(Document.bidder_id))).filter(
+        Document.tender_id == tender_id,
+        Document.doc_type == "bidder",
+        Document.bidder_id.isnot(None),
+    ).scalar() or 0
+
     total = crit * bidd
-    processed = db.query(func.count(EvaluationVerdict.verdict_id)).filter(EvaluationVerdict.tender_id == tender_id, EvaluationVerdict.supersedes_verdict_id.is_(None)).scalar() or 0
+
+    processed = db.query(func.count(EvaluationVerdict.verdict_id)).filter(
+        EvaluationVerdict.tender_id == tender_id,
+        EvaluationVerdict.supersedes_verdict_id.is_(None)
+    ).scalar() or 0
+
     job_status = _evaluation_jobs.get(tender_id, {}).get("status")
-    
+
     if job_status in ("complete", "error"):
         status = job_status
+    elif total > 0 and processed >= total:
+        status = "complete"
+    elif job_status == "processing":
+        status = "processing"
     else:
-        status = "complete" if processed >= total and total > 0 else "processing"
-        
+        status = "complete" if processed > 0 else "processing"
+
     return {"tender_id": tender_id, "processed": processed, "total": total, "status": status}
 
 @router.get("/results/{tender_id}")
