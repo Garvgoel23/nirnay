@@ -34,9 +34,14 @@ MODEL_MAP = {
     "llama-3.1-70b-versatile": GROQ_PRIMARY_MODEL,
 }
 
-# Fallback chain — large-context models only (8b excluded, can't handle docs)
+# Fallback chain — tried in order when primary hits rate/token limits
+# mixtral-8x7b: 5M TPD, 32K context — enough for bidder docs & most tenders
+# llama3-70b-8192: older 70b alias, separate quota pool from llama-3.3-70b-versatile
+# gemma2-9b: 14.4M TPD, 8K context — last resort for small payloads only
 FALLBACK_MODELS = [
     "llama-3.3-70b-versatile",
+    "llama3-70b-8192",
+    "gemma2-9b-it",
 ]
 
 
