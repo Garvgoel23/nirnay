@@ -19,13 +19,18 @@ const Upload: React.FC = () => {
   const ALLOWED = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/png', 'image/jpeg', 'image/tiff'];
 
   const pollStatus = useCallback(async (docId: string, setter: (s: DocumentStatus) => void) => {
-    const interval = setInterval(async () => {
+    // Fire immediately so the first status shows without waiting
+    const doFetch = async () => {
       try {
         const r = await client.get(`/api/ingestion/status/${docId}`);
         setter(r.data);
-        if (['extracted', 'error'].includes(r.data.status)) clearInterval(interval);
+        if (['extracted', 'error'].includes(r.data.status)) {
+          clearInterval(interval);
+        }
       } catch { clearInterval(interval); }
-    }, 3000);
+    };
+    doFetch(); // immediate first call — no 1.5s wait
+    const interval = setInterval(doFetch, 1500); // poll every 1.5s (was 3s)
   }, []);
 
   const handleUpload = async () => {
