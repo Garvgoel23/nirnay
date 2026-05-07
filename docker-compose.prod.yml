@@ -1,0 +1,27 @@
+# docker-compose.prod.yml — Backend only (frontend on Vercel)
+# Usage: docker compose -f docker-compose.prod.yml up -d --build
+
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env          # secrets stay in backend/.env
+    volumes:
+      - uploads_data:/app/data/uploads   # uploaded PDFs
+      - exports_data:/app/data/exports   # generated PDF reports
+      - db_data:/app/data/db             # SQLite database file
+    ports:
+      - "127.0.0.1:8080:8080"           # ← bind to localhost ONLY, Caddy proxies
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  uploads_data:
+  exports_data:
+  db_data:

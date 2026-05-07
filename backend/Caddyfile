@@ -9,7 +9,7 @@
 YOUR_SUBDOMAIN.duckdns.org {
 
     # ── Reverse proxy all traffic to FastAPI ───────────────────────────────────
-    reverse_proxy 127.0.0.1:1008 {
+    reverse_proxy 127.0.0.1:8080 {
         header_up Host              {host}
         header_up X-Real-IP         {remote_host}
         header_up X-Forwarded-For   {remote_host}
