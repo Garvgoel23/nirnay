@@ -1,0 +1,53 @@
+# ─── Nirnay Backend — Caddyfile ───────────────────────────────────────────────
+# Replace YOUR_SUBDOMAIN with your DuckDNS subdomain (e.g. nirnay-api)
+# Caddy auto-fetches and renews a Let's Encrypt TLS cert automatically.
+#
+# Usage:
+#   sudo cp Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+
+YOUR_SUBDOMAIN.duckdns.org {
+
+    # ── Reverse proxy all traffic to FastAPI ───────────────────────────────────
+    reverse_proxy 127.0.0.1:1008 {
+        header_up Host              {host}
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Long timeout for LLM inference (can take 30-60s per document)
+        transport http {
+            read_timeout  5m
+            write_timeout 5m
+        }
+    }
+
+    # ── CORS headers (Vercel frontend + any origin during dev) ────────────────
+    header {
+        Access-Control-Allow-Origin  *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        Access-Control-Allow-Headers "Authorization, Content-Type, Accept"
+        Access-Control-Max-Age       86400
+    }
+
+    # Handle CORS pre-flight OPTIONS requests
+    @options {
+        method OPTIONS
+    }
+    respond @options 204
+
+    # ── Upload size limit (large PDF tenders) ─────────────────────────────────
+    request_body {
+        max_size 50MB
+    }
+
+    # ── Logging ───────────────────────────────────────────────────────────────
+    log {
+        output file /var/log/caddy/nirnay-api.log {
+            roll_size     10MB
+            roll_keep     5
+            roll_keep_for 720h
+        }
+        format json
+    }
+}
